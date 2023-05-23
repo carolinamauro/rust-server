@@ -1,4 +1,3 @@
-# rust-server
+# VuelosGPT_bot
 
-<h1>Link de Telegram</h1>
-[Link](t.me/VuelosGPT_Bot)
+<h3><a href="t.me/VuelosGPT_Bot">Link al bot de telegram</a><h3>
