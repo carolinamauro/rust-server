@@ -7,8 +7,8 @@ async fn main() {
     // loads env variables from .env file
     dotenv().ok();
 
-    // run_bot();
     start_db_connection().await;
+    run_bot().await;
 }
 
 async fn run_bot() {
