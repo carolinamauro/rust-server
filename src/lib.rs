@@ -1,2 +1,2 @@
-pub mod db;
 pub mod bot;
+pub mod db;

@@ -1,5 +1,9 @@
-use mongodb::{Client, options::{ClientOptions, ServerApi, ServerApiVersion}, bson::doc};
 use dotenv;
+use mongodb::{
+    bson::doc,
+    options::{ClientOptions, ServerApi, ServerApiVersion},
+    Client,
+};
 
 async fn connect_to_db() -> mongodb::error::Result<()> {
     if let Ok(key) = dotenv::var("MONGO_URL") {
@@ -7,7 +11,7 @@ async fn connect_to_db() -> mongodb::error::Result<()> {
         client
             .database("admin")
             .run_command(doc! {"ping": 1}, None)
-        .await?;
+            .await?;
         println!("Pinged your deployment. You successfully connected to MongoDB!");
     }
 
