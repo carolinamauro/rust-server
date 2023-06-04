@@ -1,2 +1,2 @@
-pub mod command;
-pub mod setup;
+pub mod init;
+pub mod handle_commands;

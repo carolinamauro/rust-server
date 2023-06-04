@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use grupo_gpt::{bot::setup::run_bot, db::mongo::start_db_connection};
+use grupo_gpt::{bot::init::run_bot, db::mongo::start_db_connection};
 
 #[tokio::main]
 async fn main() {

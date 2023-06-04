@@ -1,4 +1,4 @@
-use teloxide::{prelude::*, utils::command::BotCommands};
+use teloxide::utils::command::BotCommands;
 
 #[derive(BotCommands, Clone)]
 #[command(
@@ -17,7 +17,7 @@ pub enum Command {
     #[command(description = "Muestra la lista de películas que están actualmente en cartelera")]
     CinemaListings,
     #[command(
-        description = "Reserva entradas para la película seleccionada",
+        description = "Reserva entradas para la película seleccionada. Proporcionar el nombre de la película, el cine, la fecha, la hora y la cantidad de entradas a reservar. Ejemplo: /reserve <nombre de la película> <nombre del cine> <fecha> <hora> <cantidad de entradas>",
         parse_with = "split"
     )]
     // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tabien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
@@ -32,6 +32,6 @@ pub enum Command {
         description = "Activa las notificaciones para recibir actualizaciones y recordatorios sobre una película en específico"
     )]
     Notify(String),
-    #[command(description = "Desactiva las notificaciones de una película en específic0")]
+    #[command(description = "Desactiva las notificaciones de una película en específico")]
     DisableNotifications(String),
 }
