@@ -1,7 +1,7 @@
 use dotenv;
 use mongodb::{
-    bson::{doc, Document, Bson},
-    options::{ClientOptions, ServerApi, ServerApiVersion},
+    bson::{doc, Document, Bson, oid::ObjectId},
+    options::{ClientOptions, ServerApi, ServerApiVersion, UpdateOptions},
     Client,
     error::Error as MongoError,
 };
@@ -43,7 +43,8 @@ pub async fn start_db_connection() {
 //EJEMPLOS
     /* search_movie_by_title(&client, "Toy Story").await;
     search_movie_by_title(&client, "Jumanji").await; 
-    search_movie_by_date_range(&client, "2023-06-12 00:00:00".to_string(), "2023-06-12 00:00:00".to_string()).await; */
+    search_movie_by_date_range(&client, "2023-06-12 00:00:00".to_string(), "2023-06-12 00:00:00".to_string()).await; 
+    make_seat_reservation(&client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap(), ('A', 1)).await;*/
 }
 
 pub async fn search_movie_by_title(client:&Result<Client, MongoError>, title: &str){
@@ -92,6 +93,34 @@ pub async fn search_movie_by_date_range(client:&Result<Client, MongoError>, from
         } else if let Err(error) = movie {
             println!("Error executing the query: {}", error);
         }
+    }else{
+        println!("connection to db failed");
+    }
+}
+
+pub async fn make_seat_reservation(client:&Result<Client, MongoError>, id: ObjectId, seat: (char, usize)){
+    if let Ok(connected_client) = client{
+
+        let movies:mongodb::Collection<Document> = connected_client.database("cinemaData").collection("movies");
+
+        
+            let filter = doc! {
+                    "_id": id,
+            };
+        
+        let reservation_id = id.to_string() + &seat.0.to_string() + &seat.1.to_string();
+        let update = doc! {
+            "$push": {
+                "reservations": &reservation_id,
+            },
+        };
+    
+        // Create the options to enable upsert (create the field if it doesn't exist)
+        let options = UpdateOptions::builder().upsert(true).build();
+    
+        // Perform the update operation
+        let updt_res: Result<mongodb::results::UpdateResult, MongoError> = movies.update_one(filter, update, options).await;
+        println!("Created reservation {}", &reservation_id);
     }else{
         println!("connection to db failed");
     }
