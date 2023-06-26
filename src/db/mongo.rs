@@ -7,6 +7,7 @@ use mongodb::{
 };
 use tokio_stream::StreamExt;
 use chrono::{NaiveDateTime};
+use teloxide::types::ChatId;
 
 
 async fn connect_to_db() ->  Result<Client, MongoError> {
@@ -36,21 +37,23 @@ async fn create_client(key: &str) -> mongodb::error::Result<Client> {
 
 pub async fn start_db_connection() {
     let client = connect_to_db().await;
-    if client.is_err() {
+    if let Ok(_connected_client) = client{
+        //EJEMPLOS
+        /*search_movie_by_title(&_connected_client, "Toy Story").await;
+        search_movie_by_title(&_connected_client, "Jumanji").await; 
+        search_movie_by_date_range(&_connected_client, "2023-06-12 00:00:00".to_string(), "2023-06-12 00:00:00".to_string()).await;  
+        make_seat_reservation(&_connected_client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap(), ('A', 2), String::from("Franco FV"), &String::from("1")).await;      
+        get_available_seats(&_connected_client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap()).await;*/
+
+    }
+    else{
         println!("Error al conectarse con la base de datos");
     }
-    
-//EJEMPLOS
-    /* search_movie_by_title(&client, "Toy Story").await;
-    search_movie_by_title(&client, "Jumanji").await; 
-    search_movie_by_date_range(&client, "2023-06-12 00:00:00".to_string(), "2023-06-12 00:00:00".to_string()).await; 
-    make_seat_reservation(&client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap(), ('A', 1)).await;*/
 }
 
-pub async fn search_movie_by_title(client:&Result<Client, MongoError>, title: &str){
-    if let Ok(connected_client) = client{
+pub async fn search_movie_by_title(client:&Client, title: &str){
 
-        let movies = connected_client.database("cinemaData").collection("movies");
+        let movies = client.database("cinemaData").collection("movies");
 
         let movie: Result<Option<Document>, MongoError> = movies
         .find_one(
@@ -60,15 +63,27 @@ pub async fn search_movie_by_title(client:&Result<Client, MongoError>, title: &s
             None,
         ).await;
         println!("Movie: {:?} \n", movie);
-    }else{
-        println!("connection to db failed");
-    }
+    
 }
 
-pub async fn search_movie_by_date_range(client:&Result<Client, MongoError>, from: String, to: String){
-    if let Ok(connected_client) = client{
+pub async fn search_movie_by_id(client:&Client, id: ObjectId){
 
-        let movies = connected_client.database("cinemaData").collection("movies");
+        let movies = client.database("cinemaData").collection("movies");
+
+        let movie: Result<Option<Document>, MongoError> = movies
+        .find_one(
+            doc! {
+                    "_id": id,
+            },
+            None,
+        ).await;
+        println!("Movie: {:?} \n", movie);
+    
+}
+
+pub async fn search_movie_by_date_range(client:&Client, from: String, to: String){
+
+        let movies = client.database("cinemaData").collection("movies");
 
         let from_date = NaiveDateTime::parse_from_str(&from, "%Y-%m-%d %H:%M:%S").unwrap();
         let to_date = NaiveDateTime::parse_from_str(&to, "%Y-%m-%d %H:%M:%S").unwrap();
@@ -93,37 +108,111 @@ pub async fn search_movie_by_date_range(client:&Result<Client, MongoError>, from
         } else if let Err(error) = movie {
             println!("Error executing the query: {}", error);
         }
-    }else{
-        println!("connection to db failed");
-    }
+    
 }
 
-pub async fn make_seat_reservation(client:&Result<Client, MongoError>, id: ObjectId, seat: (char, usize)){
-    if let Ok(connected_client) = client{
+pub async fn make_seat_reservation(mongoclient:&Client, movie_id: ObjectId, seat: (char, usize), name: String, chatid: &String){
 
-        let movies:mongodb::Collection<Document> = connected_client.database("cinemaData").collection("movies");
+        let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
+        let movies:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("movies");
 
-        
-            let filter = doc! {
-                    "_id": id,
+        if let Ok(None) = get_client(mongoclient, chatid).await {
+            create_new_client(mongoclient, chatid, name).await;
+        }
+            let movie_filter = doc! {
+                    "_id": movie_id,
+            };
+            let client_filter = doc! {
+                "chatid": chatid,
             };
         
-        let reservation_id = id.to_string() + &seat.0.to_string() + &seat.1.to_string();
+        let reservation_id = movie_id.to_string() + &seat.0.to_string() + &seat.1.to_string();
         let update = doc! {
             "$push": {
                 "reservations": &reservation_id,
             },
         };
+        let update_2 = update.clone();
     
         // Create the options to enable upsert (create the field if it doesn't exist)
         let options = UpdateOptions::builder().upsert(true).build();
+        let options_2 = options.clone();
     
         // Perform the update operation
-        let updt_res: Result<mongodb::results::UpdateResult, MongoError> = movies.update_one(filter, update, options).await;
-        println!("Created reservation {}", &reservation_id);
+        if let Ok(_res) = movies.update_one(movie_filter, update, options).await{
+            if let Ok(_res2) = clients.update_one(client_filter, update_2, options_2).await{
+                println!("Created reservation {}", &reservation_id);
+            }else{
+                println!("Error creating reservation for client");
+            }
+        }else{
+            println!("Error creating reservation for movie");
+        }   
+}
+
+pub async fn create_new_client(mongoclient:&Client, chatid: &String, name:String ){
+
+        let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
+
+        let client = clients
+        .insert_one(
+            doc! {
+                    "chatid": chatid,
+                    "name": name
+            },
+            None,
+        ).await;
+        println!("Client: {:?} \n", client);
+    
+}
+
+pub async fn get_client(mongoclient:&Client, chatid: &String)-> Result<Option<Document>, MongoError>{
+
+        let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
+
+        clients
+        .find_one(
+            doc! {
+                    "chatid": chatid.to_string(),
+            },
+            None,
+        ).await
+}
+pub async fn get_available_seats(client:&Client, movie_id: ObjectId){
+
+    let movies = client.database("cinemaData").collection("movies");
+
+    let movie: Result<Option<Document>, MongoError> = movies
+    .find_one(
+        doc! {
+                "_id": movie_id,
+        },
+        None,
+    ).await;
+    if let Ok(Some(found_movie)) = movie{
+        if let Some(Bson::Array(reservations)) = found_movie.get("reservations"){
+
+            let all_seats: Vec<String> = (1..=12)
+            .flat_map(|col| ('A'..='F').map(move |row| format!("{}{}", row, col)))//ASSUMING SEATS GO FROM A1 TO F12
+            .collect();
+
+            let unavailable_seats: Vec<&str> = reservations.iter()
+                .map(|seat| &seat.as_str().unwrap()[seat.as_str().unwrap().len() - 2 ..])
+                .collect();
+
+            let available_seats: Vec<&String> = all_seats.iter()
+                .filter(|&seat| !unavailable_seats.contains(&seat.as_str()))
+                .collect();
+
+            println!("UNAVAILABLE {:?}", unavailable_seats);
+            println!("{:?}", available_seats);
+        }else{
+            println!("All seats are available");
+        }
     }else{
-        println!("connection to db failed");
+        println!("Error finding movie of id: {}", movie_id)
     }
+
 }
 
 /* fn generate_random_date() -> NaiveDateTime {
@@ -143,11 +232,10 @@ pub async fn make_seat_reservation(client:&Result<Client, MongoError>, id: Objec
     random_date
 }
 
-pub async fn add_random_date_field(client:&Result<Client, MongoError>){
+pub async fn add_random_date_field(client:Client){
 
-    if let Ok(connected_client) = client{
 
-        let movies:Collection<Document> = connected_client.database("cinemaData").collection("movies");
+        let movies:Collection<Document> = client.database("cinemaData").collection("movies");
 
         let filter = doc! {};
         let options = FindOptions::default();
