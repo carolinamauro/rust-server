@@ -4,15 +4,30 @@ use mongodb::{
     options::{ClientOptions, ServerApi, ServerApiVersion, UpdateOptions},
     Client,
     error::Error as MongoError,
+    results::InsertOneResult,
 };
 use tokio_stream::StreamExt;
 use chrono::{NaiveDateTime};
+use tokio::sync::Mutex;
+use std::sync::Arc;
 use teloxide::types::ChatId;
 
+pub struct DataBase{
+    can_buy : Arc<Mutex<()>>,
+    mongoclient: Option<Client>
+}
 
-async fn connect_to_db() ->  Result<Client, MongoError> {
+impl DataBase {
+    pub fn new() -> Self {
+        DataBase {
+            can_buy : Arc::new(Mutex::new(())),
+            mongoclient: None
+        }
+    }
+
+ pub async fn connect_to_db(&self) ->  Result<Client, MongoError> {
     if let Ok(key) = dotenv::var("MONGO_URL") {
-        let client = create_client(&key).await?;
+        let client = self.create_client(&key).await?;
         client
             .database("admin")
             .run_command(doc! {"ping": 1}, None)
@@ -27,7 +42,7 @@ async fn connect_to_db() ->  Result<Client, MongoError> {
     }
 }
 
-async fn create_client(key: &str) -> mongodb::error::Result<Client> {
+async fn create_client(&self, key: &str) -> mongodb::error::Result<Client> {
     let mut client_options = ClientOptions::parse(key).await?;
     let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
     client_options.app_name = Some("Cinema Telegram Bot".to_string());
@@ -35,25 +50,20 @@ async fn create_client(key: &str) -> mongodb::error::Result<Client> {
     Client::with_options(client_options)
 }
 
-pub async fn start_db_connection() {
-    let client = connect_to_db().await;
-    if let Ok(_connected_client) = client{
-        //EJEMPLOS
-        /*search_movie_by_title(&_connected_client, "Toy Story").await;
-        search_movie_by_title(&_connected_client, "Jumanji").await; 
-        search_movie_by_date_range(&_connected_client, "2023-06-12 00:00:00".to_string(), "2023-06-12 00:00:00".to_string()).await;  
-        make_seat_reservation(&_connected_client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap(), ('A', 2), String::from("Franco FV"), &String::from("1")).await;      
-        get_available_seats(&_connected_client, mongodb::bson::oid::ObjectId::parse_str("648680d984b08c29dcf00537").unwrap()).await;*/
-
+pub async fn start_db_connection(&mut self) {
+    let client = self.connect_to_db().await;
+    if let Ok(connected_client) = client{
+        self.mongoclient = Some(connected_client);
     }
     else{
         println!("Error al conectarse con la base de datos");
     }
 }
 
-pub async fn search_movie_by_title(client:&Client, title: &str){
+pub async fn search_movie_by_title(&self, title: &str) -> Result<Option<Document>, MongoError>{
 
-        let movies = client.database("cinemaData").collection("movies");
+    if let Some(mongoclient) = &self.mongoclient {
+        let movies = mongoclient.database("cinemaData").collection("movies");
 
         let movie: Result<Option<Document>, MongoError> = movies
         .find_one(
@@ -62,13 +72,20 @@ pub async fn search_movie_by_title(client:&Client, title: &str){
             },
             None,
         ).await;
-        println!("Movie: {:?} \n", movie);
+        movie
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }
     
 }
 
-pub async fn search_movie_by_id(client:&Client, id: ObjectId){
-
-        let movies = client.database("cinemaData").collection("movies");
+pub async fn search_movie_by_id(&self , id: ObjectId) -> Result<Option<Document>, MongoError>{
+    
+    if let Some(mongoclient) = &self.mongoclient {
+        let movies = mongoclient.database("cinemaData").collection("movies");
 
         let movie: Result<Option<Document>, MongoError> = movies
         .find_one(
@@ -77,18 +94,27 @@ pub async fn search_movie_by_id(client:&Client, id: ObjectId){
             },
             None,
         ).await;
-        println!("Movie: {:?} \n", movie);
+        movie
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }
     
 }
 
-pub async fn search_movie_by_date_range(client:&Client, from: String, to: String){
+pub async fn search_movie_by_date_range(&self, from: String, to: String) -> Result<Vec<Document>, MongoError>{
 
-        let movies = client.database("cinemaData").collection("movies");
+    if let Some(mongoclient) = &self.mongoclient {
+        let movies = mongoclient.database("cinemaData").collection("movies");
 
         let from_date = NaiveDateTime::parse_from_str(&from, "%Y-%m-%d %H:%M:%S").unwrap();
         let to_date = NaiveDateTime::parse_from_str(&to, "%Y-%m-%d %H:%M:%S").unwrap();
         let bson_date_from = Bson::DateTime(mongodb::bson::DateTime::from_millis(from_date.timestamp_millis()));
         let bson_date_to = Bson::DateTime(mongodb::bson::DateTime::from_millis(to_date.timestamp_millis()));
+
+        let mut results = vec!();
 
         let movie: Result<mongodb::Cursor<Document>, MongoError> = movies
         .find(
@@ -103,55 +129,85 @@ pub async fn search_movie_by_date_range(client:&Client, from: String, to: String
         if let Ok(mut cursor) = movie {
             // Convert the cursor into a stream
             while let Some(result) = cursor.try_next().await.unwrap() {
-                println!("Found document: {:?}\n", result);
+                results.push(result);
             }
-        } else if let Err(error) = movie {
-            println!("Error executing the query: {}", error);
+            Ok(results)
+        } else {
+            Err(MongoError::from(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Error making query",
+            )))
         }
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }
     
 }
 
-pub async fn make_seat_reservation(mongoclient:&Client, movie_id: ObjectId, seat: (char, usize), name: String, chatid: &String){
+pub async fn buy_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, name: String, chatid: &String) -> Result<Vec<String>, MongoError>{
 
+    if let Some(mongoclient) = &self.mongoclient {
         let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
         let movies:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("movies");
 
-        if let Ok(None) = get_client(mongoclient, chatid).await {
-            create_new_client(mongoclient, chatid, name).await;
+        if let Ok(None) = self.get_client(chatid).await {
+            self.create_new_client(chatid, name).await?;
         }
-            let movie_filter = doc! {
-                    "_id": movie_id,
-            };
-            let client_filter = doc! {
-                "chatid": chatid,
-            };
-        
-        let reservation_id = movie_id.to_string() + &seat.0.to_string() + &seat.1.to_string();
-        let update = doc! {
-            "$push": {
-                "reservations": &reservation_id,
-            },
-        };
-        let update_2 = update.clone();
-    
-        // Create the options to enable upsert (create the field if it doesn't exist)
-        let options = UpdateOptions::builder().upsert(true).build();
-        let options_2 = options.clone();
-    
-        // Perform the update operation
-        if let Ok(_res) = movies.update_one(movie_filter, update, options).await{
-            if let Ok(_res2) = clients.update_one(client_filter, update_2, options_2).await{
-                println!("Created reservation {}", &reservation_id);
+
+            let _res = self.can_buy.lock().await;
+            // Perform the update operation
+            if let Ok(true) = self.seats_are_available(movie_id, &seats).await{
+                let mut reservations = vec!();
+                for seat in seats {
+
+                    let movie_filter = doc! {
+                        "_id": movie_id,
+                    };
+                    let client_filter = doc! {
+                        "chatid": chatid,
+                    };
+                    let reservation_id = movie_id.to_string() + &seat.0.to_string() + &seat.1.to_string();
+                    let update = doc! {
+                        "$push": {
+                            "reservations": &reservation_id,
+                        },
+                    };
+                    let update_2 = update.clone();
+                
+                    // Create the options to enable upsert (create the field if it doesn't exist)
+                    let options = UpdateOptions::builder().upsert(true).build();
+                    let options_2 = options.clone();
+                    if let Ok(_res) = movies.update_one(movie_filter, update, options).await{
+                        if let Ok(_res2) = clients.update_one(client_filter, update_2, options_2).await{
+                            reservations.push(reservation_id);
+                        }else{
+                            break;
+                        }
+                    }else{
+                        break;
+                    }
+                }
+                Ok(reservations)
             }else{
-                println!("Error creating reservation for client");
+                Err(MongoError::from(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "One or more seats are taken",
+                )))
             }
-        }else{
-            println!("Error creating reservation for movie");
-        }   
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }   
 }
 
-pub async fn create_new_client(mongoclient:&Client, chatid: &String, name:String ){
-
+pub async fn create_new_client(&self, chatid: &String, name:String ) -> Result<InsertOneResult, MongoError>{
+    
+    if let Some(mongoclient) = &self.mongoclient {
         let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
 
         let client = clients
@@ -162,12 +218,19 @@ pub async fn create_new_client(mongoclient:&Client, chatid: &String, name:String
             },
             None,
         ).await;
-        println!("Client: {:?} \n", client);
+        client
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    } 
     
 }
 
-pub async fn get_client(mongoclient:&Client, chatid: &String)-> Result<Option<Document>, MongoError>{
+pub async fn get_client(&self, chatid: &String)-> Result<Option<Document>, MongoError>{
 
+    if let Some(mongoclient) = &self.mongoclient {
         let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
 
         clients
@@ -177,44 +240,74 @@ pub async fn get_client(mongoclient:&Client, chatid: &String)-> Result<Option<Do
             },
             None,
         ).await
+
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    } 
 }
-pub async fn get_available_seats(client:&Client, movie_id: ObjectId){
+pub async fn get_available_seats(&self, movie_id: ObjectId) -> Result<Vec<String>, MongoError>{
 
-    let movies = client.database("cinemaData").collection("movies");
+    if let Some(mongoclient) = &self.mongoclient {
+        let movies = mongoclient.database("cinemaData").collection("movies");
 
-    let movie: Result<Option<Document>, MongoError> = movies
-    .find_one(
-        doc! {
-                "_id": movie_id,
-        },
-        None,
-    ).await;
-    if let Ok(Some(found_movie)) = movie{
-        if let Some(Bson::Array(reservations)) = found_movie.get("reservations"){
-
+        let movie: Result<Option<Document>, MongoError> = movies
+        .find_one(
+            doc! {
+                    "_id": movie_id,
+            },
+            None,
+        ).await;
+        if let Ok(Some(found_movie)) = movie{
             let all_seats: Vec<String> = (1..=12)
-            .flat_map(|col| ('A'..='F').map(move |row| format!("{}{}", row, col)))//ASSUMING SEATS GO FROM A1 TO F12
-            .collect();
-
-            let unavailable_seats: Vec<&str> = reservations.iter()
-                .map(|seat| &seat.as_str().unwrap()[seat.as_str().unwrap().len() - 2 ..])
+                .flat_map(|col| ('A'..='F').map(move |row| format!("{}{}", row, col)))//ASSUMING SEATS GO FROM A1 TO F12
                 .collect();
+            if let Some(Bson::Array(reservations)) = found_movie.get("reservations"){
+                let unavailable_seats: Vec<&str> = reservations.iter()
+                    .map(|seat| &seat.as_str().unwrap()[seat.as_str().unwrap().len() - 2 ..])
+                    .collect();
 
-            let available_seats: Vec<&String> = all_seats.iter()
-                .filter(|&seat| !unavailable_seats.contains(&seat.as_str()))
-                .collect();
 
-            println!("UNAVAILABLE {:?}", unavailable_seats);
-            println!("{:?}", available_seats);
+                let available_seats: Vec<String> = all_seats
+                    .into_iter()
+                    .filter(|seat| !unavailable_seats.contains(&seat.as_str()))
+                    .collect();
+
+                Ok(available_seats)
+            }else{
+                Ok(all_seats)
+            }
         }else{
-            println!("All seats are available");
+            Err(MongoError::from(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Error finding movie",
+            )))
         }
     }else{
-        println!("Error finding movie of id: {}", movie_id)
-    }
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    } 
 
 }
 
+async fn seats_are_available(&self, movie_id: ObjectId, seats_to_buy: &Vec<(char, usize)>) -> Result<bool, MongoError>{
+    if let Ok(available_seats) = self.get_available_seats(movie_id).await{
+        Ok(seats_to_buy.iter().all(|seat| {
+            let seat_string = seat.0.to_string() + &seat.1.to_string();
+            available_seats.contains(&seat_string)
+        }))
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Error getting available seats",
+        )))
+    } 
+}
+}
 /* fn generate_random_date() -> NaiveDateTime {
     let start_date = NaiveDateTime::parse_from_str("2023-06-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let end_date = NaiveDateTime::parse_from_str("2023-12-31 23:59:59", "%Y-%m-%d %H:%M:%S").unwrap();
