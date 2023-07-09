@@ -10,7 +10,6 @@ use tokio_stream::StreamExt;
 use chrono::{NaiveDateTime};
 use tokio::sync::Mutex;
 use std::sync::Arc;
-use teloxide::types::ChatId;
 
 pub struct DataBase{
     can_buy : Arc<Mutex<()>>,
@@ -56,7 +55,7 @@ pub async fn start_db_connection(&mut self) {
         self.mongoclient = Some(connected_client);
     }
     else{
-        println!("Error al conectarse con la base de datos");
+        println!("Error connecting to data base");
     }
 }
 
@@ -73,6 +72,39 @@ pub async fn search_movie_by_title(&self, title: &str) -> Result<Option<Document
             None,
         ).await;
         movie
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }
+    
+}
+
+pub async fn search_movie_with_multiple_params(&self, title: &str, cinema: i32, datetimestring: String) -> Result<Option<Document>, MongoError>{
+
+    if let Some(mongoclient) = &self.mongoclient {
+        let movies = mongoclient.database("cinemaData").collection("movies");
+
+        if let Ok(datetime) = NaiveDateTime::parse_from_str(&datetimestring, "%Y-%m-%d %H:%M:%S"){
+            let bson_datetime = Bson::DateTime(mongodb::bson::DateTime::from_millis(datetime.timestamp_millis()));
+
+            let movie: Result<Option<Document>, MongoError> = movies
+            .find_one(
+                doc! {
+                        "original_title": title,
+                        "cinema_id": cinema,
+                        "show_time": bson_datetime
+                },
+                None,
+            ).await;
+            movie
+        }else{
+            Err(MongoError::from(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Wrong date format",
+            )))
+        }
     }else{
         Err(MongoError::from(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -147,7 +179,7 @@ pub async fn search_movie_by_date_range(&self, from: String, to: String) -> Resu
     
 }
 
-pub async fn buy_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, name: String, chatid: &String) -> Result<Vec<String>, MongoError>{
+pub async fn buy_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, name: &String, chatid: &String) -> Result<Vec<String>, MongoError>{
 
     if let Some(mongoclient) = &self.mongoclient {
         let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
@@ -205,7 +237,7 @@ pub async fn buy_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, n
     }   
 }
 
-pub async fn create_new_client(&self, chatid: &String, name:String ) -> Result<InsertOneResult, MongoError>{
+pub async fn create_new_client(&self, chatid: &String, name:&String ) -> Result<InsertOneResult, MongoError>{
     
     if let Some(mongoclient) = &self.mongoclient {
         let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
@@ -307,6 +339,7 @@ async fn seats_are_available(&self, movie_id: ObjectId, seats_to_buy: &Vec<(char
         )))
     } 
 }
+
 }
 /* fn generate_random_date() -> NaiveDateTime {
     let start_date = NaiveDateTime::parse_from_str("2023-06-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();

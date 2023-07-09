@@ -6,32 +6,41 @@ use teloxide::utils::command::BotCommands;
     description = "These commands are supported:"
 )]
 pub enum Command {
-    #[command(description = "Muestra este texto de ayuda")]
+    #[command(description = "Shows this help text")]
     Help,
     // #[command(
     //     description = "Inicia la interacción y proporciona una breve descripción de sus funcionalidades."
     // )]
     // Start,
-    #[command(description = "Realiza una búsqueda de la película solicitada.")]
+    #[command(description = "Searches for given movie")]
     Search(String),
-    #[command(description = "Muestra la lista de películas que están actualmente en cartelera")]
+    #[command(description = "Shows movies that are showing today")]
     CinemaListings,
     #[command(
-        description = "Reserva entradas para la película seleccionada. Proporcionar el nombre de la película, el cine, la fecha, la hora y la cantidad de entradas a reservar. Ejemplo: /reserve <nombre de la película> <nombre del cine> <fecha> <hora> <cantidad de entradas>",
+        description = "Buys tickets for given movie. Must enter username, movie name, cinema, date, time and seats. For an example: /buytickets <username> <moviename> <cinema> <date> <time> <seats separated by commas>",
         parse_with = "split"
     )]
-    // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tabien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
-    Reserve {
+    // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tambien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
+    BuyTickets {
+        username: String,
         movie: String,
-        cinema: String,
+        cinema: i32,
         date: String,
         time: String,
-        tickets: u8,
+        seats: String,
     },
     #[command(
-        description = "Activa las notificaciones para recibir actualizaciones y recordatorios sobre una película en específico"
+        description = "Check available seats for a movie. For an example: /checkseats <movie name> <cinema> <date> <time>",
+        parse_with = "split"
     )]
-    Notify(String),
-    #[command(description = "Desactiva las notificaciones de una película en específico")]
-    DisableNotifications(String),
+    CheckSeats {
+        movie: String,
+        cinema: i32,
+        date: String,
+        time: String,
+    },
+    #[command(
+        description = "Check all the tickets you have bought",
+    )]
+    CheckReservations,
 }
