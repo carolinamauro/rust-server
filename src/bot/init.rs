@@ -59,7 +59,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     let time : DateTime<Utc>= bson_date_time.to_system_time().into();
                 
                     // Use the datetime as needed
-                    bot.send_message(msg.chat.id, format!("Title: {}\n Overview: {}\n Date: {} \n Date: {} \n Cinema: {} \n Room: {}", res.get("original_title").unwrap(), res.get("overview").unwrap(), time.date_naive(), time.time(), res.get("cinema_id").unwrap(), res.get("room_id").unwrap()))
+                    bot.send_message(msg.chat.id, format!("Title: {}\n Overview: {}\n Date: {} \n Time: {} \n Cinema: {} \n Room: {}", res.get("original_title").unwrap(), res.get("overview").unwrap(), time.date_naive(), time.time(), res.get("cinema_id").unwrap(), res.get("room_id").unwrap()))
                     .await?
                 } else {
                     bot.send_message(msg.chat.id, format!("No show-time found for movie"))
@@ -98,11 +98,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
         }
         Command::BuyTickets {
             username,
-            movie,
             cinema,
             date,
             time,
             seats,
+            movie
         } => {
             let db_lock = DB.read().await;
             let date_clone = date.clone();
@@ -122,12 +122,12 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             }
         }
         Command::CheckSeats{
-            movie,
             cinema,
             date,
             time,
+            movie,
         } => {
-
+            println!("{}", movie);
             let db_lock = DB.read().await;
             if let Ok(Some(res)) = db_lock.search_movie_with_multiple_params(&movie, cinema, date + " " + &time).await{
                 if let Ok(vec) = db_lock.get_available_seats(res.get("_id").unwrap().as_object_id().unwrap()).await{

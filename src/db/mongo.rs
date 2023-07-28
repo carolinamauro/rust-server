@@ -67,7 +67,7 @@ pub async fn search_movie_by_title(&self, title: &str) -> Result<Option<Document
         let movie: Result<Option<Document>, MongoError> = movies
         .find_one(
             doc! {
-                    "original_title": title,
+                    "original_title": remove_quotes(title),
             },
             None,
         ).await;
@@ -92,7 +92,7 @@ pub async fn search_movie_with_multiple_params(&self, title: &str, cinema: i32, 
             let movie: Result<Option<Document>, MongoError> = movies
             .find_one(
                 doc! {
-                        "original_title": title,
+                        "original_title": remove_quotes(title),
                         "cinema_id": cinema,
                         "show_time": bson_datetime
                 },
@@ -340,6 +340,14 @@ async fn seats_are_available(&self, movie_id: ObjectId, seats_to_buy: &Vec<(char
     } 
 }
 
+}
+
+fn remove_quotes(input: &str) -> &str {
+    if input.starts_with('"') && input.ends_with('"') && input.len() >= 2 {
+        &input[1..input.len() - 1]
+    } else {
+        input
+    }
 }
 /* fn generate_random_date() -> NaiveDateTime {
     let start_date = NaiveDateTime::parse_from_str("2023-06-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();

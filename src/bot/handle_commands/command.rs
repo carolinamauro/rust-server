@@ -1,5 +1,27 @@
 use teloxide::utils::command::BotCommands;
 
+fn parse_check_seats(input: String) -> Result<(i32, String, String, String), teloxide::utils::command::ParseError> {
+    let mut parts = input.split_whitespace();
+    let cinema = parts.next().unwrap().parse().ok().unwrap();
+    let date = parts.next().unwrap().to_string();
+    let time = parts.next().unwrap().to_string();
+    let movie = parts.collect::<Vec<&str>>().join(" ").to_string(); 
+
+    Ok((cinema, date, time, movie))
+}
+
+fn parse_buy_tickets(input: String) -> Result<(String, i32, String, String, String, String), teloxide::utils::command::ParseError> {
+    let mut parts = input.split_whitespace();
+
+    let username = parts.next().unwrap().to_string();
+    let cinema = parts.next().unwrap().parse().ok().unwrap();
+    let date = parts.next().unwrap().to_string();
+    let time = parts.next().unwrap().to_string();
+    let seats = parts.next().unwrap().to_string();
+    let movie = parts.collect::<Vec<&str>>().join(" ").to_string(); 
+
+    Ok((username, cinema, date, time, seats, movie))
+}
 #[derive(BotCommands, Clone)]
 #[command(
     rename_rule = "lowercase",
@@ -17,27 +39,27 @@ pub enum Command {
     #[command(description = "Shows movies that are showing today")]
     CinemaListings,
     #[command(
-        description = "Buys tickets for given movie. Must enter username, movie name, cinema, date, time and seats. For an example: /buytickets <username> <moviename> <cinema> <date> <time> <seats separated by commas>",
-        parse_with = "split"
+        description = "Buys tickets for given movie. Must enter username, cinema, date, time, seats and movie name. For an example: /buytickets <username> <cinema> <date> <time> <seats separated by commas> <movie name>",
+        parse_with = parse_buy_tickets
     )]
     // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tambien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
     BuyTickets {
         username: String,
-        movie: String,
         cinema: i32,
         date: String,
         time: String,
         seats: String,
+        movie: String,
     },
     #[command(
-        description = "Check available seats for a movie. For an example: /checkseats <movie name> <cinema> <date> <time>",
-        parse_with = "split"
+        description = "Check available seats for a movie. For an example: /checkseats <cinema> <date> <time> <movie name>",
+        parse_with = parse_check_seats
     )]
     CheckSeats {
-        movie: String,
         cinema: i32,
         date: String,
         time: String,
+        movie: String,
     },
     #[command(
         description = "Check all the tickets you have bought",
