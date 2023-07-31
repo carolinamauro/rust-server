@@ -82,7 +82,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         let time : DateTime<Utc>= bson_date_time.to_system_time().into();
                     
                         // Use the datetime as needed
-                        bot.send_message(msg.chat.id, format!("Title: {}\n Date: {} \n Date: {} \n Cinema: {}", movie.get("original_title").unwrap(), time.date_naive(), time.time(), movie.get("cinema_id").unwrap()))
+                        bot.send_message(msg.chat.id, format!("Title: {}\n Date: {} \n Time: {} \n Cinema: {}", movie.get("original_title").unwrap(), time.date_naive(), time.time(), movie.get("cinema_id").unwrap()))
                         .await?;
                     } else {
                         bot.send_message(msg.chat.id, format!("No show-time for movie: {}", movie.get("original_title").unwrap()))
@@ -159,7 +159,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                                 let time : DateTime<Utc>= bson_date_time.to_system_time().into();
                             
                                 // Use the datetime as needed
-                                bot.send_message(msg.chat.id, format!("Title: {}\n Date: {} \n Date: {} \n Cinema: {} \n Room: {} \n Seat: {}", movie.get("original_title").unwrap(), time.date_naive(), time.time(), movie.get("cinema_id").unwrap(), movie.get("room_id").unwrap(), seat))
+                                bot.send_message(msg.chat.id, format!("Title: {}\n Date: {} \n Time: {} \n Cinema: {} \n Room: {} \n Seat: {}", movie.get("original_title").unwrap(), time.date_naive(), time.time(), movie.get("cinema_id").unwrap(), movie.get("room_id").unwrap(), seat))
                                 .await?;
                             } else {
                                 bot.send_message(msg.chat.id, format!("No show-time found for movie"))
