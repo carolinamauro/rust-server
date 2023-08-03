@@ -7,7 +7,7 @@ use mongodb::{
     results::InsertOneResult,
 };
 use tokio_stream::StreamExt;
-use chrono::{NaiveDateTime};
+use chrono::NaiveDateTime;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
