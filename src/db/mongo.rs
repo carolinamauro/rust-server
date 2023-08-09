@@ -237,6 +237,51 @@ pub async fn buy_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, n
     }   
 }
 
+pub async fn cancel_tickets(&self, movie_id: ObjectId, seats: Vec<(char, usize)>, chatid: &String) -> Result<Vec<String>, MongoError>{
+
+    if let Some(mongoclient) = &self.mongoclient {
+        let clients:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("clients");
+        let movies:mongodb::Collection<Document> = mongoclient.database("cinemaData").collection("movies");
+
+                let mut reservations = vec!();
+                for seat in seats {
+
+                    let movie_filter = doc! {
+                        "_id": movie_id,
+                    };
+                    let client_filter = doc! {
+                        "chatid": chatid,
+                    };
+                    let reservation_id = movie_id.to_string() + &seat.0.to_string() + &seat.1.to_string();
+                    let delete = doc! {
+                        "$pull": {
+                            "reservations": &reservation_id,
+                        },
+                    };
+                    let delete_2 = delete.clone();
+                
+                    // Create the options to enable upsert (create the field if it doesn't exist)
+                    let options = UpdateOptions::builder().upsert(true).build();
+                    let options_2 = options.clone();
+                    if let Ok(_res) = movies.update_one(movie_filter, delete, options).await{
+                        if let Ok(_res2) = clients.update_one(client_filter, delete_2, options_2).await{
+                            reservations.push(reservation_id);
+                        }else{
+                            break;
+                        }
+                    }else{
+                        break;
+                    }
+                }
+                Ok(reservations)
+    }else{
+        Err(MongoError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Not connected to database",
+        )))
+    }   
+}
+
 pub async fn create_new_client(&self, chatid: &String, name:&String ) -> Result<InsertOneResult, MongoError>{
     
     if let Some(mongoclient) = &self.mongoclient {

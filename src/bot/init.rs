@@ -121,6 +121,30 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     .await?
             }
         }
+        Command::CancelTickets {
+            cinema,
+            date,
+            time,
+            seats,
+            movie
+        } => {
+            let db_lock = DB.read().await;
+            let date_clone = date.clone();
+            if let Ok(Some(res)) = db_lock.search_movie_with_multiple_params(&movie, cinema, date + " " + &time).await{
+                let vec_seats = parse_seats(seats);
+                let vec_seats_clone = vec_seats.clone();
+                if let Ok(_vec) = db_lock.cancel_tickets( res.get("_id").unwrap().as_object_id().unwrap(), vec_seats, &msg.chat.id.to_string()).await{
+                    bot.send_message(msg.chat.id, format!("Canceled the seats {:?} for movie {} at cinema {} which will be showing the {} at {}.", vec_seats_clone, movie, cinema, date_clone, time))
+                    .await?
+                }else{
+                    bot.send_message(msg.chat.id, "No reservations found")
+                    .await?
+                }
+            }else{
+                bot.send_message(msg.chat.id, format!("Movie not found. Check date and time format"))
+                    .await?
+            }
+        }
         Command::CheckSeats{
             cinema,
             date,

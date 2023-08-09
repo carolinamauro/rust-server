@@ -22,6 +22,18 @@ fn parse_buy_tickets(input: String) -> Result<(String, i32, String, String, Stri
 
     Ok((username, cinema, date, time, seats, movie))
 }
+
+fn parse_cancel_tickets(input: String) -> Result<(i32, String, String, String, String), teloxide::utils::command::ParseError> {
+    let mut parts = input.split_whitespace();
+
+    let cinema = parts.next().unwrap().parse().ok().unwrap();
+    let date = parts.next().unwrap().to_string();
+    let time = parts.next().unwrap().to_string();
+    let seats = parts.next().unwrap().to_string();
+    let movie = parts.collect::<Vec<&str>>().join(" ").to_string(); 
+
+    Ok((cinema, date, time, seats, movie))
+}
 #[derive(BotCommands, Clone)]
 #[command(
     rename_rule = "lowercase",
@@ -45,6 +57,18 @@ pub enum Command {
     // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tambien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
     BuyTickets {
         username: String,
+        cinema: i32,
+        date: String,
+        time: String,
+        seats: String,
+        movie: String,
+    },
+    #[command(
+        description = "Cancels tickets for given movie. Must enter cinema, date, time, seats and movie name. For an example: /buytickets <cinema> <date> <time> <seats separated by commas> <movie name>",
+        parse_with = parse_cancel_tickets
+    )]
+    // aca abria que hacerlo escalable, varias peliculas, varios cines, etc. Tambien podríamos dar la opcion de recibir notificaciones o recordatorios dada una reserva
+    CancelTickets {
         cinema: i32,
         date: String,
         time: String,
